@@ -17,13 +17,11 @@ def __filter__(fname, noun, verb, merge_obj):
         print(f(c, len(x.IDList)))
         merged_list = merge_obj.loj(x.IDList)
         len_merged_list = len(merged_list)
-        if len_merged_list > 0:
-            c = 'After merging, {num} {noun} remain'
-            print(f(c, len_merged_list))
-        else:
-            error_msg = 'No {noun} retained for analysis'
-            raise ValueError(f(error_msg, 0))
+        if len_merged_list <= 0:
+            raise ValueError(f('No {noun} retained for analysis', 0))
 
+        c = 'After merging, {num} {noun} remain'
+        print(f(c, len_merged_list))
         return merged_list
 
 

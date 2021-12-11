@@ -12,10 +12,9 @@ def find_ld_prefix(chrom, min_pos):
     alkes_url = "https://data.broadinstitute.org/alkesgroup/UKBB_LD"
     bp_starts = list(range(1, 252000001, 1000000))
     bp_ends = [x+3000000 for x in bp_starts]
-    i = max([i for i,x in enumerate(bp_starts) if x<=min_pos])
+    i = max(i for i,x in enumerate(bp_starts) if x<=min_pos)
     prefix = "chr%d_%d_%d" % (chrom, bp_starts[i], bp_ends[i])
-    ld_prefix = os.path.join(alkes_url, prefix)
-    return ld_prefix
+    return os.path.join(alkes_url, prefix)
 
 def load_ld(ld_prefix, server=True, npz_suffix=""):
     # ld_prefix="https://data.broadinstitute.org/alkesgroup/UKBB_LD/chr12_41000001_44000001"
@@ -44,9 +43,9 @@ def load_ld(ld_prefix, server=True, npz_suffix=""):
         #     k = data.keys()
         #     i = data.items()
         #     v = data.values()
+    elif not os.path.exists(R_filename):
+        raise IOError('%s not found' % (R_filename))
     else:
-        if not os.path.exists(R_filename):
-            raise IOError('%s not found' % (R_filename))
         R = sparse.load_npz(R_filename).toarray()
     R = R + R.T
     assert np.allclose(np.diag(R), 1.0)

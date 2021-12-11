@@ -79,13 +79,11 @@ def which_compression(fh):
 def get_compression(fh):
     '''Which sort of compression should we use with read_csv?'''
     if fh.endswith('gz'):
-        compression = 'gzip'
+        return 'gzip'
     elif fh.endswith('bz2'):
-        compression = 'bz2'
+        return 'bz2'
     else:
-        compression = None
-
-    return compression
+        return None
 
 
 def read_cts(fh, match_snps):
@@ -126,7 +124,7 @@ def ldscore_fromlist(flist, num=None):
     ldscore_array = []
     for fh_i, fh in enumerate(flist):
         y = ldscore(fh, num)
-        if len(ldscore_array)>0:
+        if ldscore_array:
             if (not series_eq(y.SNP, ldscore_array[0].SNP)) or (not series_eq(y.index, ldscore_array[0].index)):
                 raise ValueError('LD Scores for concatenation must have identical SNP columns (and A1/A2 columns if such columns exist).')
             else:  # keep SNP and CHR column from only the first file
@@ -136,12 +134,11 @@ def ldscore_fromlist(flist, num=None):
         y.rename(columns=new_col_dict, inplace=True)
         ldscore_array.append(y)
 
-    if len(ldscore_array)==1:
-        ldscores_all = ldscore_array[0]
-    else:
-        #ldscores_all = pd.concat(ldscore_array, axis=1)
-        ldscores_all = pd.concat(ldscore_array, axis=1)
-    return ldscores_all
+    return (
+        ldscore_array[0]
+        if len(ldscore_array) == 1
+        else pd.concat(ldscore_array, axis=1)
+    )
 
 
 def l2_parser(fh, compression):
@@ -172,7 +169,7 @@ def annot_parser(fh, compression, frqfile_full=None, compression_frq=None, anno=
         df_annot = df_annot.loc[:, [c for c in df_annot.columns if (c=='SNP' or c in anno)]]
     if frqfile_full is not None:
         df_frq = frq_parser(frqfile_full, compression_frq)
-        df_annot = df_annot[(.95 > df_frq.FRQ) & (df_frq.FRQ > 0.05)]
+        df_annot = df_annot[(df_frq.FRQ < .95) & (df_frq.FRQ > 0.05)]
     return df_annot
 
 
@@ -191,9 +188,11 @@ def ldscore(fh, num=None):
         first_fh = sub_chr(fh, 1) + suffix
         s, compression = which_compression(first_fh)
         compression = None
-        chr_ld = []
-        for i in tqdm(range(1, num+1)):
-            chr_ld.append(l2_parser(sub_chr(fh, i) + suffix + s, compression))
+        chr_ld = [
+            l2_parser(sub_chr(fh, i) + suffix + s, compression)
+            for i in tqdm(range(1, num + 1))
+        ]
+
         x = pd.concat(chr_ld)  # automatically sorted by chromosome
         del chr_ld
     else:  # just one file
@@ -204,16 +203,15 @@ def ldscore(fh, num=None):
     is_sorted = True
     for c in x['CHR'].unique():
         is_sorted = np.all(np.diff(x.loc[x['CHR']==c, 'BP']) >= 0)
-        if not is_sorted: break            
+        if not is_sorted: break
     if not is_sorted:
         x.sort_values(by=['CHR', 'BP'], inplace=True) # SEs will be wrong unless sorted
     x.drop(columns=['BP'], inplace=True)
-    
+
     if x.index.name == 'snpid':
         assert not np.any(x.index.duplicated())
-    else:
-        if np.any(x['SNP'].duplicated()):
-            x.drop_duplicates(subset='SNP', inplace=True)    
+    elif np.any(x['SNP'].duplicated()):
+        x.drop_duplicates(subset='SNP', inplace=True)
     return x
     
 
