@@ -52,7 +52,7 @@ def _check_shape_block(xty_block_values, xtx_block_values):
         raise ValueError(
             'Last two axes of xtx_block_values must have same dimension.')
 
-    return xtx_block_values.shape[0:2]
+    return xtx_block_values.shape[:2]
 
 
 class Jackknife(object):
@@ -555,7 +555,7 @@ class RatioJackknife(Jackknife):
         '''
         n_blocks, p = denom.shape
         pseudovalues = np.zeros((n_blocks, p))
-        for j in range(0, n_blocks):
+        for j in range(n_blocks):
             pseudovalues[j, ...] = n_blocks * est - \
                 (n_blocks - 1) * numer[j, ...] / denom[j, ...]
 

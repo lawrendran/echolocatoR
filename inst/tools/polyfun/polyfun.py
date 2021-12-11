@@ -41,13 +41,11 @@ def __filter__(fname, noun, verb, merge_obj):
         logging.info(f(c, len(x.IDList)))
         merged_list = merge_obj.loj(x.IDList)
         len_merged_list = len(merged_list)
-        if len_merged_list > 0:
-            c = 'After merging, {num} {noun} remain'
-            logging.info(f(c, len_merged_list))
-        else:
-            error_msg = 'No {noun} retained for analysis'
-            raise ValueError(f(error_msg, 0))
+        if len_merged_list <= 0:
+            raise ValueError(f('No {noun} retained for analysis', 0))
 
+        c = 'After merging, {num} {noun} remain'
+        logging.info(f(c, len_merged_list))
         return merged_list
 
 
@@ -68,12 +66,10 @@ def check_args(args):
         raise ValueError('must specify at least one of --compute-h2-L2, --compute-ldscores, --compute-h2-bins')
     if args.compute_h2_L2 and args.compute_h2_bins and not args.compute_ldscores:
         raise ValueError('cannot use both --compute-h2_L2 and --compute_h2_bins without also specifying --compute-ldscores')
-    if args.chr is not None:
-        if args.compute_h2_L2 or args.compute_h2_bins:
-            raise ValueError('--chr can only be specified when using only --compute-ldscores')
-    if args.bfile_chr is not None:
-        if not args.compute_ldscores:
-            raise ValueError('--bfile-chr can only be specified when using --compute-ldscores')
+    if args.chr is not None and (args.compute_h2_L2 or args.compute_h2_bins):
+        raise ValueError('--chr can only be specified when using only --compute-ldscores')
+    if args.bfile_chr is not None and not args.compute_ldscores:
+        raise ValueError('--bfile-chr can only be specified when using --compute-ldscores')
     if args.no_partitions:
         if not args.compute_h2_L2:
             raise ValueError('cannot specify --no-partitions without specifying --compute-h2-L2')
@@ -83,11 +79,11 @@ def check_args(args):
             raise ValueError('cannot specify both --no-partitions and --compute-h2-bins')
     if args.compute_ldscores and args.compute_h2_bins and not args.compute_h2_L2:
         raise ValueError('cannot use both --compute-ldscores and --compute_h2_bins without also specifying --compute-h2-L2')    
-    
+
     #verify partitioning parameters
     if args.skip_Ckmedian and (args.num_bins is None or args.num_bins<=0):
         raise ValueError('You must specify --num-bins when using --skip-Ckmedian')        
-    
+
     #verify LD-score related parameters
     if args.compute_ldscores:
         if args.bfile_chr is None:
@@ -95,17 +91,21 @@ def check_args(args):
         if args.ld_wind_cm is None and args.ld_wind_kb is None and args.ld_wind_snps is None:
             args.ld_wind_cm = 1.0
             logging.warning('no ld-wind argument specified.  PolyFun will use --ld-cm 1.0')
-            
+
     if not args.compute_ldscores:
-        if not (args.ld_wind_cm is None and args.ld_wind_kb is None and args.ld_wind_snps is None):
+        if (
+            args.ld_wind_cm is not None
+            or args.ld_wind_kb is not None
+            or args.ld_wind_snps is not None
+        ):
             raise ValueError('--ld-wind parameters can only be specified together with --compute-ldscores')
         if args.keep is not None:
             raise ValueError('--keep can only be specified together with --compute-ldscores')
         if args.chr is not None:
             raise ValueError('--chr can only be specified together with --compute-ldscores')
-        
-            
-    
+
+
+
     if args.compute_h2_L2:
         if args.sumstats is None:
             raise ValueError('--sumstats must be specified when using --compute-h2-L2')
@@ -113,7 +113,7 @@ def check_args(args):
             raise ValueError('--ref-ld-chr must be specified when using --compute-h2-L2')
         if args.w_ld_chr is None:
             raise ValueError('--w-ld-chr must be specified when using --compute-h2-L2')
-            
+
     if args.compute_h2_bins:
         if args.sumstats is None:
             raise ValueError('--sumstats must be specified when using --compute-h2-bins')
@@ -121,8 +121,8 @@ def check_args(args):
             raise ValueError('--w-ld-chr must be specified when using --compute-h2-bins')
         if args.ref_ld_chr is not None and not args.compute_ldscores:
             raise ValueError('--ref-ld-chr should not be specified when using --compute-h2-bins, unless you also use --compute-ldscores')
-            
-            
+
+
     return args
 
 def check_files(args):
@@ -135,11 +135,9 @@ def check_files(args):
             get_file_name(args, 'ref-ld', chr_num, verify_exists=True, allow_multiple=True)
             get_file_name(args, 'w-ld', chr_num, verify_exists=True)
             get_file_name(args, 'annot', chr_num, verify_exists=True, allow_multiple=True)
-            
+
     if args.compute_ldscores:
-        if args.chr is None: chr_range = range(1,23)            
-        else: chr_range = range(args.chr, args.chr+1)
-        
+        chr_range = range(1,23) if args.chr is None else range(args.chr, args.chr+1)
         for chr_num in chr_range:
             get_file_name(args, 'bim', chr_num, verify_exists=True)
             get_file_name(args, 'fam', chr_num, verify_exists=True)
@@ -147,7 +145,7 @@ def check_files(args):
             if not args.compute_h2_L2:
                 get_file_name(args, 'snpvar_ridge', chr_num, verify_exists=True)
                 get_file_name(args, 'bins', chr_num, verify_exists=True)
-                
+
     if args.compute_h2_bins and not args.compute_ldscores:
         for chr_num in range(1,23):
             get_file_name(args, 'w-ld', chr_num, verify_exists=True)
@@ -205,7 +203,7 @@ def get_file_name(args, file_type, chr_num, verify_exists=True, allow_multiple=F
         file_name = args.output_prefix + '.%d.bins.parquet'%(chr_num)
     elif file_type == 'M':
         file_name = args.output_prefix + '.%d.l2.M'%(chr_num)
-        
+
     elif file_type == 'annot':
         assert verify_exists
         assert allow_multiple
@@ -215,7 +213,7 @@ def get_file_name(args, file_type, chr_num, verify_exists=True, allow_multiple=F
             if not os.path.exists(file_name_part):
                 file_name_part = ref_ld_chr + '%d.annot.parquet'%(chr_num)
             file_name.append(file_name_part)
-        
+
     elif file_type == 'ref-ld':
         assert verify_exists
         assert allow_multiple
@@ -225,14 +223,14 @@ def get_file_name(args, file_type, chr_num, verify_exists=True, allow_multiple=F
             if not os.path.exists(file_name_part):
                 file_name_part = ref_ld_chr + '%d.l2.ldscore.parquet'%(chr_num)
             file_name.append(file_name_part)
-        
+
     elif file_type == 'w-ld':
         assert verify_exists
         file_name = args.w_ld_chr + '%d.l2.ldscore.gz'%(chr_num)
         if not os.path.exists(file_name):
             file_name = args.w_ld_chr + '%d.l2.ldscore.parquet'%(chr_num)
-    
-    
+
+
     elif file_type == 'bim':
         file_name = args.bfile_chr + '%d.bim'%(chr_num)
     elif file_type == 'fam':
@@ -241,16 +239,15 @@ def get_file_name(args, file_type, chr_num, verify_exists=True, allow_multiple=F
         file_name = args.bfile_chr + '%d.bed'%(chr_num)
     else:
         raise ValueError('unknown file type')
-        
+
     if verify_exists:
         if allow_multiple:
             for fname in file_name:
                 if not os.path.exists(fname):
                     raise IOError('%s file not found: %s'%(file_type, fname))
-        else:
-            if not os.path.exists(file_name):
-                raise IOError('%s file not found: %s'%(file_type, file_name))
-            
+        elif not os.path.exists(file_name):
+            raise IOError('%s file not found: %s'%(file_type, file_name))
+
     return file_name
     
     
@@ -269,24 +266,13 @@ class PolyFun:
         args.n_blocks = n_blocks
         args.M = None
         args.not_M_5_50 = True
-        
+
         #if not ridge, the we'll use the LD-scores of our bins
         if not use_ridge:
             args = deepcopy(args)
             args.ref_ld_chr = args.output_prefix+'.'
-        
-        #read input data
-        if use_ridge or not args.compute_ldscores or True:
-            M_annot, w_ld_cname, ref_ld_cnames, df_sumstats, _ = sumstats._read_ld_sumstats(args, log, args.h2)
-        else:
-            #TODO: Don't reload files if we don't have to...
-            M_annot = self.M
-            w_ld_cname = 'w_ld'
-            ref_ld_cnames = self.df_bins.columns
-            if args.sumstats.endswith('.parquet'): df_sumstats = pd.read_parquet(args.sumstats)            
-            else: df_sumstats = pd.read_table(args.sumstats, delim_whitespace=True)            
-            ###merge everything together...
-            
+
+        M_annot, w_ld_cname, ref_ld_cnames, df_sumstats, _ = sumstats._read_ld_sumstats(args, log, args.h2)
         #prepare LD-scores for S-LDSC run
         ref_ld = np.array(df_sumstats[ref_ld_cnames], dtype=np.float32)
         sumstats._check_ld_condnum(args, log, ref_ld_cnames)
@@ -328,7 +314,7 @@ class PolyFun:
             nn=nn,
             keep_large=keep_large
             )
-            
+
         #save the results object
         if use_ridge:
             self.hsqhat_ridge = hsqhat
@@ -509,7 +495,7 @@ class PolyFun:
         
     def partition_snps_Ckmedian(self, args, use_ridge):
         logging.info('Clustering SNPs into bins using the R Ckmeans.1d.dp package')
-        
+
         #try loading the Ckmeans.1d.dp package
         try:
             import rpy2
@@ -532,14 +518,10 @@ class PolyFun:
             raise    
 
         #access the right class member
-        if use_ridge:
-            df_snpvar = self.df_snpvar_ridge
-        else:
-            df_snpvar = self.df_snpvar
-
+        df_snpvar = self.df_snpvar_ridge if use_ridge else self.df_snpvar
         #sort df_snpvar
         df_snpvar_sorted = df_snpvar['SNPVAR'].sort_values()
-        
+
         #perform the segmentation
         if args.num_bins is None or args.num_bins<=0:
             logging.info('Determining the optimal number of bins (if this is slow, consider using --num-bins 20 (or some other number))')
@@ -550,9 +532,9 @@ class PolyFun:
         num_bins = len(bin_sizes)
         logging.info('Ckmedian.1d.dp partitioned SNPs into %d bins'%(num_bins))        
 
-        #define df_bins
-        df_bins = self.create_df_bins(bin_sizes, df_snpvar, df_snpvar_sorted=df_snpvar_sorted)
-        return df_bins
+        return self.create_df_bins(
+            bin_sizes, df_snpvar, df_snpvar_sorted=df_snpvar_sorted
+        )
         
         
         
@@ -566,12 +548,9 @@ class PolyFun:
             from sklearn.cluster import KMeans
         except ImportError:          
             raise ImportError('sklearn not properly installed. Please reinstall it')
-            
+
         #access the right class member
-        if use_ridge: df_snpvar = self.df_snpvar_ridge            
-        else: df_snpvar = self.df_snpvar
-            
-            
+        df_snpvar = self.df_snpvar_ridge if use_ridge else self.df_snpvar
         #perform K-means clustering
         kmeans_obj = KMeans(n_clusters=args.num_bins)
         kmeans_obj.fit(df_snpvar[['SNPVAR']])
@@ -582,13 +561,11 @@ class PolyFun:
         for bin_i, cluster_label in enumerate(bins_order[:-1]):
             next_cluster_label = bins_order[bin_i+1]
             assert df_snpvar.loc[kmeans_obj.labels_==cluster_label, 'SNPVAR'].max() <= df_snpvar.loc[kmeans_obj.labels_==next_cluster_label, 'SNPVAR'].min()
-        
+
         #define bin_sizes
         bin_sizes = np.bincount(kmeans_obj.labels_)[bins_order]
-            
-        #define df_bins
-        df_bins = self.create_df_bins(bin_sizes, df_snpvar, df_snpvar_sorted=None)
-        return df_bins
+
+        return self.create_df_bins(bin_sizes, df_snpvar, df_snpvar_sorted=None)
         
 
     def partition_snps_to_bins(self, args, use_ridge):
@@ -622,11 +599,9 @@ class PolyFun:
             logging.info('Saving constrained SNP variances to disk')
         else:
             logging.info('Saving SNP variances to disk')
-        
-        #determine which df_snpvar to use
-        if use_ridge: df_snpvar = self.df_snpvar_ridge            
-        else: df_snpvar = self.df_snpvar
 
+        #determine which df_snpvar to use
+        df_snpvar = self.df_snpvar_ridge if use_ridge else self.df_snpvar
         #constrain the ratio between the largest and smallest snp-var
         if constrain_range:
             df_snpvar = df_snpvar.copy()
@@ -635,10 +610,10 @@ class PolyFun:
             df_snpvar.loc[df_snpvar['SNPVAR'] < min_snpvar, 'SNPVAR'] = min_snpvar
             df_snpvar['SNPVAR'] *= h2_total / df_snpvar['SNPVAR'].sum()
             assert np.isclose(df_snpvar['SNPVAR'].sum(), h2_total)
-            
+
         #merge snpvar with sumstats
         if args.sumstats.endswith('.parquet'): df_sumstats = pd.read_parquet(args.sumstats)            
-        else: df_sumstats = pd.read_table(args.sumstats, delim_whitespace=True)            
+        else: df_sumstats = pd.read_table(args.sumstats, delim_whitespace=True)
         df_sumstats.drop(columns=['SNP'], errors='ignore', inplace=True)
         for col in ['CHR', 'BP', 'A1', 'A2']:
             if col not in df_sumstats.columns:
@@ -658,13 +633,13 @@ class PolyFun:
 
         #iterate over chromosomes 
         for chr_num in tqdm(range(1,23)):
-        
+
             #define output file name
             output_fname = 'snpvar'
             if use_ridge: output_fname += '_ridge'
             if constrain_range: output_fname += '_constrained'
             snpvar_chr_file = get_file_name(args, output_fname, chr_num, verify_exists=False)
-                
+
             #save snpvar to file
             df_snpvar_chr = df_snpvar.query('CHR==%d'%(chr_num))
             df_snpvar_chr.to_csv(snpvar_chr_file, index=False, sep='\t', compression='gzip', float_format='%0.4e')
@@ -690,27 +665,22 @@ class PolyFun:
         
     def load_bins_chr(self, args, chr_num):
         bins_file = get_file_name(args, 'bins', chr_num)
-        df_bins_chr = pd.read_parquet(bins_file)
-        return df_bins_chr
+        return pd.read_parquet(bins_file)
         
         
     def compute_ld_scores(self, args):    
         #define the range of chromosomes to iterate over
-        if args.chr is None:
-            chr_range = range(1,23)
-        else:
-            chr_range = range(args.chr, args.chr+1)
-        
+        chr_range = range(1,23) if args.chr is None else range(args.chr, args.chr+1)
         #iterate over chromosomes and compute LD-scores
         ###df_ldscores_chr_list = []
         for chr_num in tqdm(chr_range, disable=len(chr_range)==1):
-        
+
             #load or extract the bins for the current chromosome
             try:
                 df_bins_chr = self.df_bins.query('CHR==%d'%(chr_num))
             except AttributeError:
                 df_bins_chr = self.load_bins_chr(args, chr_num)
-                
+
             #compute LD-scores for this chromosome
             if args.bfile_chr is not None:
                 df_ldscores_chr = self.compute_ldscores_plink_chr(args, chr_num, df_bins_chr)
@@ -718,7 +688,7 @@ class PolyFun:
                 # raise NotImplementedError('--npz-prefix is not yet supported')
             else:
                 raise ValueError('no LDscore computation method specified')
-                
+
             #save the LD-scores to disk
             ldscores_output_file = get_file_name(args, 'ldscores', chr_num, verify_exists=False)
             df_ldscores_chr.to_parquet(ldscores_output_file, index=False)
@@ -739,12 +709,12 @@ class PolyFun:
 
         
     def compute_ldscores_plink_chr(self, args, chr_num, df_bins_chr):
-    
+
         # read bim/snp
         bim_file = get_file_name(args, 'bim', chr_num)
         array_snps = parse.PlinkBIMFile(bim_file)
         df_bim = array_snps.df
-        
+
         #heuristically reduce df_bins_chr to a small superset of the relevant SNPs        
         df_bins_chr = df_bins_chr.loc[df_bins_chr['BP'].isin(df_bim['BP'])].copy()
         df_bins_chr = set_snpid_index(df_bins_chr)
@@ -753,19 +723,18 @@ class PolyFun:
         df_bim = set_snpid_index(df_bim)
         if np.any(~df_bim.index.isin(df_bins_chr.index)):
             error_msg = 'Not all SNPs were assigned a bin (meaning some SNPS are not in the annotation files)'
-            if args.allow_missing:
-                is_good_snp = df_bim.index.isin(df_bins_chr.index)
-                if not np.any(is_good_snp):
-                    raise ValueError('No SNPs in chromosome %d have annotations'%(chr_num))
-                keep_snps = np.where(is_good_snp)[0]
-                df_bim = df_bim.loc[is_good_snp]
-                logging.warning(error_msg)
-                logging.warning('Keeping only %d/%d SNPs in chromosome %d that have annotations'%(df_bim.shape[0], len(is_good_snp), chr_num))
-            else:
+            if not args.allow_missing:
                 raise ValueError(error_msg + '. If you wish to omit the missing SNPs, please use the flag --allow-missing')
+            is_good_snp = df_bim.index.isin(df_bins_chr.index)
+            if not np.any(is_good_snp):
+                raise ValueError('No SNPs in chromosome %d have annotations'%(chr_num))
+            keep_snps = np.where(is_good_snp)[0]
+            df_bim = df_bim.loc[is_good_snp]
+            logging.warning(error_msg)
+            logging.warning('Keeping only %d/%d SNPs in chromosome %d that have annotations'%(df_bim.shape[0], len(is_good_snp), chr_num))
         else:
             keep_snps = None
-            
+
         #rearrange df_bins_chr to match the order of SNPs in the plink file
         if (df_bins_chr.shape[0] > df_bim.shape[0]) or np.any(df_bins_chr.index != df_bim.index):
             assert np.all(df_bim.index.isin(df_bins_chr.index))
@@ -778,8 +747,8 @@ class PolyFun:
         fam_file = get_file_name(args, 'fam', chr_num)
         df_fam = pd.read_table(fam_file, header=None, usecols=[5], delim_whitespace=True)
         n = df_fam.shape[0]
-        
-        
+
+
         #find keep_indivs    
         if args.keep is None:
             keep_indivs= None
@@ -794,7 +763,7 @@ class PolyFun:
         geno_array = ldscore.PlinkBEDFile(bed_file, n, array_snps, keep_snps=keep_snps,
             keep_indivs=keep_indivs, mafMin=None)
 
-            
+
         # determine block widths
         num_wind_args = np.array((args.ld_wind_snps, args.ld_wind_kb, args.ld_wind_cm), dtype=bool)
         if np.sum(num_wind_args) != 1:
@@ -812,7 +781,7 @@ class PolyFun:
             coords = np.array(df_bim['CM'])#[geno_array.kept_snps]
             if len(np.unique(coords)) == 1:
                 raise ValueError('bim file has no CM data --- please use a different ld-wind option')
-            
+
         #compute LD-scores
         block_left = ldscore.getBlockLefts(coords, max_dist)
         if block_left[len(block_left)-1] == 0:
@@ -820,9 +789,9 @@ class PolyFun:
             raise ValueError(error_msg)
         t0 = time.time()
         geno_array._currentSNP = 0
-        logging.info('Computing LD scores for chromosome %d'%(chr_num))        
+        logging.info('Computing LD scores for chromosome %d'%(chr_num))
         ldscores = geno_array.ldScoreVarBlocks(block_left, args.chunk_size, annot=df_bins_chr.drop(columns=SNP_COLUMNS).values)
-        
+
         #create an ldscores df
         df_ldscores = pd.DataFrame(ldscores, index=df_bins_chr.index, columns=df_bins_chr.drop(columns=SNP_COLUMNS).columns)
         df_ldscores = pd.concat((df_bins_chr[SNP_COLUMNS], df_ldscores), axis=1)

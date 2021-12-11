@@ -81,16 +81,18 @@ def run_executable(cmd, description, good_returncode=0, measure_time=True, check
 class Fine_Mapping(object):
     def __init__(self, genotypes_file, sumstats_file, n, chr_num, ldstore_exe, 
                     sample_file=None, incl_samples=None, cache_dir=None, n_threads=None):
-    
+
         #check that data is valid
-        if genotypes_file is not None:        
-            if genotypes_file.endswith('.bgen'):
-                if sample_file is None:
-                    raise IOError('sample-file must be provided with a bgen file')
-    
-    
+        if (
+            genotypes_file is not None
+            and genotypes_file.endswith('.bgen')
+            and sample_file is None
+        ):
+            raise IOError('sample-file must be provided with a bgen file')
+
+
         #read sumstats and filter to target chromosome only
-        logging.info('Loading sumstats file...')        
+        logging.info('Loading sumstats file...')
         if sumstats_file.endswith('.parquet'):
             df_sumstats = pd.read_parquet(sumstats_file)
         else: 
@@ -104,7 +106,7 @@ class Fine_Mapping(object):
             df_sumstats['P'] = stats.chi2(1).sf(df_sumstats['Z']**2)
         logging.info('Loaded sumstats for %d SNPs'%(df_sumstats.shape[0]))
 
-        
+
         #save class members
         self.genotypes_file = genotypes_file
         self.n = n
@@ -142,21 +144,18 @@ class Fine_Mapping(object):
         
             
     def set_locus(self, locus_start, locus_end, extract_ld=True, read_ld_matrix=False, verbose=False):
-    
+
         #update self.df_sumstats_locus
         self.df_sumstats_locus = self.df_sumstats.query('%d <= BP <= %d'%(locus_start, locus_end))
         if self.df_sumstats_locus.shape[0] == 0:
             raise ValueError('No SNPs found in sumstats file in the BP range %d-%d'%(locus_start, locus_end))
-            
+
         #if we don't need to extract LD then we're done
         if not extract_ld:
             return
-            
+
         #define file names
-        if self.cache_dir is None:
-            ld_dir = tempfile.mkdtemp()
-        else:
-            ld_dir = self.cache_dir
+        ld_dir = tempfile.mkdtemp() if self.cache_dir is None else self.cache_dir
         if self.incl_samples is None:
             ldstore_basename = os.path.join(ld_dir, '%s.%d.%d.%d'%(os.path.basename(self.genotypes_file), self.chr, locus_start, locus_end))
         else:
@@ -181,7 +180,7 @@ class Fine_Mapping(object):
                 bp2 = int(ld_basename.split('.')[-2])
                 assert bp1 < bp2
                 if (bp1 > locus_start) or (bp2 < locus_end): continue
-                
+
                 #Make sure that the LD matrix contains the SNPs that we need
                 incl_file_cached = ld_file[:-3]+'.incl'
                 meta_file_cached = ld_file[:-3]+'.meta.txt'
@@ -195,13 +194,13 @@ class Fine_Mapping(object):
                 df_ld_snps = set_snpid_index(df_ld_snps)
                 if not np.all(self.df_sumstats_locus.index.isin(df_ld_snps.index)):
                     continue
-            
+
                 #if we got here than we found a suitable LD file
                 ld_matrix_file = ld_file
                 logging.info('Found an existing LD file containing all SNPs with sumstats in chromosome %d BP %d-%d'%(self.chr, locus_start, locus_end))
                 found_cached_ld_file = True
                 break
-        
+
         #run LDstore if we didnt find a suitable file in the cache
         if not found_cached_ld_file:
             logging.info('Computing LD matrix for chromosome %d BP %d-%d'%(self.chr, locus_start, locus_end))
@@ -222,7 +221,7 @@ class Fine_Mapping(object):
             if self.sample_file is not None:
                 ldstore_cmd += ['--samples', self.sample_file]        
             run_executable(ldstore_cmd, 'LDStore', measure_time=True, show_output=verbose, show_command=verbose)
-                
+
             #run LDStore merge if needed
             bcor_files = glob.glob(bcor_file + '_*')
             num_bcor_files = len(bcor_files)
@@ -235,20 +234,20 @@ class Fine_Mapping(object):
                 ldstore_merge_cmd += ['--bcor', bcor_file]
                 ldstore_merge_cmd += ['--merge', str(num_bcor_files)]
                 run_executable(ldstore_merge_cmd, 'LDStore merge', measure_time=False, show_output=verbose, show_command=verbose)                                
-            
+
             #run LDStore meta        
             ldstore_meta_cmd = [self.ldstore_exe]
             ldstore_meta_cmd += ['--bcor', bcor_file]
             ldstore_meta_cmd += ['--meta', meta_file]
             run_executable(ldstore_meta_cmd, 'LDStore meta', measure_time=False, show_output=verbose, show_command=verbose)
-        
+
             #open meta_file
             df_ld_snps = pd.read_table(meta_file, delim_whitespace=True)
             df_ld_snps.rename(columns={'RSID':'SNP', 'position':'BP', 'chromosome':'CHR', 'A_allele':'A1', 'B_allele':'A2'}, inplace=True, errors='raise')
             df_ld_snps = set_snpid_index(df_ld_snps)
             if not np.all(self.df_sumstats_locus.index.isin(df_ld_snps.index)):
                 raise IOError('Not all variants exist in LDStore output')
-                
+
             #create incl-variants file if needed
             if df_ld_snps.shape[0] == self.df_sumstats_locus.shape[0]:
                 use_incl_file = False
@@ -258,7 +257,7 @@ class Fine_Mapping(object):
                 df_ldstore_meta_out.rename(columns={'SNP':'RSID', 'BP':'position', 'CHR':'chromosome', 'A1':'A_allele', 'A2':'B_allele'}, inplace=True, errors='raise')
                 df_ldstore_meta_out.to_csv(incl_variants_file, index=False, header=True, sep=' ')
                 use_incl_file = True
-            
+
             #extract LD matrix to a text file (finally!!!)        
             logging.info('Extracting LD matrix to a text file')
             t0 = time.time()            
@@ -268,14 +267,14 @@ class Fine_Mapping(object):
             if use_incl_file:
                 ldstore_ld_cmd += ['--incl-variants', incl_variants_file]
             run_executable(ldstore_ld_cmd, 'LDStore LD extraction', measure_time=True, show_output=verbose, show_command=verbose)        
-            
-            
+
+
         #read LD matrix
         if read_ld_matrix:
             df_ld = pd.read_table(ld_matrix_file, delim_whitespace=True, index_col=None, header=None)
             if df_ld.shape[0] != df_ld.shape[1]:
                 raise IOError('LDStore LD matrix has inconsistent rows/columns')
-                
+
             #if we didn't find the LD matrix in the cache, we just created it
             df_ld.index = df_ld_snps.index
             df_ld.columns = df_ld_snps.index            
@@ -285,7 +284,7 @@ class Fine_Mapping(object):
 
             #do a final verification that we're synced
             assert np.all(df_ld.index == self.df_sumstats_locus.index)
-            
+
             self.df_ld = df_ld
             self.df_ld_snps = df_ld_snps
             

@@ -62,8 +62,7 @@ def append_intercept(x):
     '''
     n_row = x.shape[0]
     intercept = np.ones((n_row, 1), dtype=np.float32)
-    x_new = np.concatenate((x, intercept), axis=1)
-    return x_new
+    return np.concatenate((x, intercept), axis=1)
 
 
 def remove_intercept(x):
@@ -160,13 +159,9 @@ class LD_Score_Regression(object):
                     raise TypeError('Arguments must be 2D arrays.')
             except AttributeError:
                 raise TypeError('Arguments must be arrays.')
-            
+
         #find large-chi2 SNPs to keep
-        if keep_large:
-            is_large_chi2 = (y[:,0] > 80)
-        else:
-            is_large_chi2 = False
-            
+        is_large_chi2 = (y[:,0] > 80) if keep_large else False
         n_snp, self.n_annot = x.shape
         if any(i.shape != (n_snp, 1) for i in [y, w, N]):
             raise ValueError(
@@ -233,31 +228,31 @@ class LD_Score_Regression(object):
                 x_mean[-1]=0.0
                 xc = x - x_mean
                 xc = IRWLS._weight(xc, initial_w)
-                
+
             x = IRWLS._weight(x, initial_w)
             y = IRWLS._weight(yp, initial_w)
-            
+
             if nn:
                 assert not loco
                 jknife = jk.LstsqJackknifeSlow(x, y, is_large_chi2, n_blocks, evenodd_split=evenodd_split, nn=True, chr_num=chr_num)
             else:
                 jknife = jk.LstsqJackknifeFast(x, y, is_large_chi2, n_blocks, evenodd_split=evenodd_split, chr_num=chr_num)
-                    
+
             if loco:
                 assert not nn
                 assert not keep_large
                 if self.constrain_intercept:
                     xc = x
-                
+
                 self.jknife_ridge = jk.Jackknife_Ridge(xc, y, n_blocks,
                     chr_num=chr_num, verbose=verbose, ridge_lambda=ridge_lambda,
                     has_intercept=(not self.constrain_intercept),
                     standardize=standardize_ridge, approx_ridge=approx_ridge,
                     skip_ridge_jackknife=skip_ridge_jackknife, num_chr_sets=num_chr_sets)
-                    
+
         else:
             assert not loco
-        
+
             update_func = lambda a: self._update_func(
                 a, x_tot, w, N, M_tot, Nbar, intercept)
             jknife = IRWLS(

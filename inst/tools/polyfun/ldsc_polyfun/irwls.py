@@ -110,7 +110,7 @@ class IRWLS(object):
                 'w has shape {S}. w must have shape ({N}, 1).'.format(S=w.shape, N=n))
 
         w = np.sqrt(w)
-        for i in range(2):  # update this later
+        for _ in range(2):  # update this later
             new_w = np.sqrt(update_func(cls.wls(x, y, w)))
             if new_w.shape != w.shape:
                 logging.info('IRWLS update:', new_w.shape, w.shape)
@@ -120,14 +120,11 @@ class IRWLS(object):
 
         x = cls._weight(x, w)
         y = cls._weight(y, w)
-        if slow:
-            jknife = jk.LstsqJackknifeSlow(
-                x, y, n_blocks, separators=separators)
-        else:
-            jknife = jk.LstsqJackknifeFast(
-                x, y, n_blocks, separators=separators)
-
-        return jknife
+        return (
+            jk.LstsqJackknifeSlow(x, y, n_blocks, separators=separators)
+            if slow
+            else jk.LstsqJackknifeFast(x, y, n_blocks, separators=separators)
+        )
 
     @classmethod
     def wls(cls, x, y, w):
@@ -159,8 +156,7 @@ class IRWLS(object):
 
         x = cls._weight(x, w)
         y = cls._weight(y, w)
-        coef = np.linalg.lstsq(x, y)
-        return coef
+        return np.linalg.lstsq(x, y)
 
     @classmethod
     def _weight(cls, x, w):

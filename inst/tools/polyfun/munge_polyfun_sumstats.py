@@ -32,8 +32,13 @@ def compute_Neff(df_sumstats, n, chi2_cutoff=30):
     df_sumstats_chi2_large = df_sumstats.query('CHISQ_BOLT_LMM > %s'%(chi2_cutoff))
     if df_sumstats_chi2_large.shape[0]==0:
         return n
-    Neff = int(np.median(df_sumstats_chi2_large['CHISQ_BOLT_LMM'] / df_sumstats_chi2_large['CHISQ_LINREG']) * n)
-    return Neff
+    return int(
+        np.median(
+            df_sumstats_chi2_large['CHISQ_BOLT_LMM']
+            / df_sumstats_chi2_large['CHISQ_LINREG']
+        )
+        * n
+    )
     
 
 def find_df_column(df, strings_to_find, allow_missing=False):
@@ -184,9 +189,10 @@ def filter_sumstats(df_sumstats, min_info_score=None, min_maf=None, remove_stran
     
 
 def compute_casecontrol_neff(df_sumstats):
-    logging.info('Computing the effective sample size for case-control data...')    
-    Neff = (4.0 / (1.0/df_sumstats['N_CASES'] + 1.0/df_sumstats['N_CONTROLS'])).astype(np.int)
-    return Neff
+    logging.info('Computing the effective sample size for case-control data...')
+    return (
+        4.0 / (1.0 / df_sumstats['N_CASES'] + 1.0 / df_sumstats['N_CONTROLS'])
+    ).astype(np.int)
 
     
     
@@ -194,7 +200,7 @@ def compute_casecontrol_neff(df_sumstats):
 if __name__ == '__main__':
 
     import argparse
-    parser = argparse.ArgumentParser()    
+    parser = argparse.ArgumentParser()
     parser.add_argument('--sumstats', required=True, help='Input summary statistics file')
     parser.add_argument('--out', required=True, help='Name of output file')
     parser.add_argument('--n', type=int, default=None, help='Sample size. If not specified, will try to infer this from the input file')
@@ -205,25 +211,25 @@ if __name__ == '__main__':
     parser.add_argument('--keep-hla', default=False, action='store_true', help='If specified, Keep SNPs in the HLA region')
     parser.add_argument('--no-neff', default=False, action='store_true', help='If specified, use the true rather than the effective sample size in BOLT-LMM runs')
     args = parser.parse_args()
-    
+
     #check package versions
     check_package_versions()    
-    
+
     #configure the logger
     configure_logger(args.out)
-    
+
     logging.info('Reading sumstats file...')
     t0 = time.time()
     df_sumstats = pd.read_table(args.sumstats, delim_whitespace=True)
     logging.info('Done in %0.2f seconds'%(time.time()-t0))
-    
+
     #rename df_sumstats columns
     df_sumstats = rename_df_columns(df_sumstats, min_info_score=args.min_info, min_maf=args.min_maf)
 
     #filter sumstats
     df_sumstats = filter_sumstats(df_sumstats, min_info_score=args.min_info, min_maf=args.min_maf, remove_strand_ambig=args.remove_strand_ambig, keep_hla=args.keep_hla)
 
-    #compute Neff    
+    #compute Neff
     if 'CHISQ_BOLT_LMM' in df_sumstats.columns and not args.no_neff:
         if args.n is None:
             raise ValueError('--n must be specified with BOLT input files')
@@ -239,19 +245,11 @@ if __name__ == '__main__':
     elif 'N' in df_sumstats.columns:
         if 'N_CASES' in df_sumstats.columns or 'N_CONTROLS' in df_sumstats.columns:
             raise ValueError('cannot both have an N column and N_cases/N_controls columns in the sumstats file')
-        pass
     elif 'N_CASES' in df_sumstats.columns and 'N_CONTROLS' in df_sumstats.columns:
         df_sumstats['N']  = compute_casecontrol_neff(df_sumstats)
     else:
         raise ValueError('must specify sample size, via either (1) --n flag; (2) N column in the sumstats file; or (3) Two columns N_cases, N_controls in the sumstats file')
-    
-    # #create SNP string
-    # df_sumstats['SNP'] = df_sumstats['SNP'].astype('str') + '.' + \
-                         # df_sumstats['CHR'].astype('str') + '.' + \
-                         # df_sumstats['BP'].astype('str') + '.' + \
-                         # df_sumstats['A1'].astype('str') + '.' + \
-                         # df_sumstats['A2'].astype('str')
-    
+
     #compute Z
     if 'Z' in df_sumstats.columns:
         pass
@@ -265,7 +263,7 @@ if __name__ == '__main__':
         df_sumstats = compute_z(df_sumstats)
     else:
         raise ValueError('Sumstats file must include a p-value, Z-score or chi2 column to compute Z-scores')
-    
+
     #write output
     logging.info('Saving munged sumstats of %d SNPs to %s'%(df_sumstats.shape[0], args.out))
     df_sumstats[['SNP', 'CHR', 'BP', 'A1', 'A2', 'Z', 'N']].to_parquet(args.out)

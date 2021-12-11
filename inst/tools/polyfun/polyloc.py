@@ -26,20 +26,24 @@ def check_args(args):
         raise ValueError('must specify at least one of --compute-partitions, --compute-ldscores, --compute-polyloc')
     if args.compute_partitions and args.compute_polyloc and not args.compute_ldscores:
         raise ValueError('cannot use both --compute-partitions and --compute_polyloc without also specifying --compute-ldscores')
-    if args.chr is not None:
-        if args.compute_partitions or args.compute_polyloc:
-            raise ValueError('--chr can only be specified when using only --compute-ldscores')
-    if args.bfile_chr is not None:
-        if not args.compute_ldscores and not args.compute_partitions:
-            raise ValueError('--bfile-chr can only be specified when using --compute-partitions or --compute-ldscores')
+    if args.chr is not None and (
+        args.compute_partitions or args.compute_polyloc
+    ):
+        raise ValueError('--chr can only be specified when using only --compute-ldscores')
+    if (
+        args.bfile_chr is not None
+        and not args.compute_ldscores
+        and not args.compute_partitions
+    ):
+        raise ValueError('--bfile-chr can only be specified when using --compute-partitions or --compute-ldscores')
     if args.compute_ldscores and args.compute_polyloc and not args.compute_partitions:
         raise ValueError('cannot use both --compute-ldscores and --compute_polyloc without also specifying --compute-partitions')    
-        
+
     if args.posterior is not None and not args.compute_partitions:
-        raise ValueError('--posterior can only be specified together with --compute-partitions')        
+        raise ValueError('--posterior can only be specified together with --compute-partitions')
     if args.sumstats is not None and not args.compute_polyloc:
         raise ValueError('--sumstats can only be specified together with --compute-polyloc')
-    
+
     #verify partitioning parameters
     if args.skip_Ckmedian and (args.num_bins is None or args.num_bins<=0):
         raise ValueError('You must specify --num-bins when using --skip-Ckmedian')        
@@ -50,7 +54,7 @@ def check_args(args):
             raise ValueError('You must specify --bfile-chr when you specify --compute-partitions')
         if args.posterior is None:
             raise ValueError('--posterior must be specified when using --compute-partitions')
-            
+
     #verify LD-score related parameters
     if args.compute_ldscores:
         if args.bfile_chr is None:
@@ -60,7 +64,11 @@ def check_args(args):
             logging.warning('no ld-wind argument specified.  PolyLoc will use --ld-cm 1.0')
 
     if not args.compute_ldscores:
-        if not (args.ld_wind_cm is None and args.ld_wind_kb is None and args.ld_wind_snps is None):
+        if (
+            args.ld_wind_cm is not None
+            or args.ld_wind_kb is not None
+            or args.ld_wind_snps is not None
+        ):
             raise ValueError('--ld-wind parameters can only be specified together with --compute-ldscores')
         if args.keep is not None:
             raise ValueError('--keep can only be specified together with --compute-ldscores')
@@ -72,27 +80,24 @@ def check_args(args):
             raise ValueError('--sumstats must be specified when using --compute-polyloc')    
         if args.w_ld_chr is None:
             raise ValueError('--w-ld-chr must be specified when using --compute-polyloc')    
-            
+
     return args
 
 def check_files(args):
 
-    if args.compute_partitions:
-        if not os.path.exists(args.posterior):
-            raise IOError('%s not found'%(args.posterior))
-        
+    if args.compute_partitions and not os.path.exists(args.posterior):
+        raise IOError('%s not found'%(args.posterior))
+
     #check that required input files exist
     if args.compute_ldscores or args.compute_partitions:
-        if args.chr is None: chr_range = range(1,23)            
-        else: chr_range = range(args.chr, args.chr+1)
-        
+        chr_range = range(1,23) if args.chr is None else range(args.chr, args.chr+1)
         for chr_num in chr_range:
             get_file_name(args, 'bim', chr_num, verify_exists=True)
             get_file_name(args, 'fam', chr_num, verify_exists=True)
             get_file_name(args, 'bed', chr_num, verify_exists=True)
             if not args.compute_partitions:
                 get_file_name(args, 'bins', chr_num, verify_exists=True)
-                
+
     if args.compute_polyloc:    
         for chr_num in range(1,23):
             get_file_name(args, 'w-ld', chr_num, verify_exists=True)
@@ -194,24 +199,22 @@ class PolyLoc(PolyFun):
         if p==1: p=0.99999999
         assert np.all(np.any(cumsum_prop_h2 >= p, axis=0))
         num_jk = cumsum_prop_h2.shape[1]
-        
+
         last_bin_index = np.argmax(cumsum_prop_h2 >= p, axis=0)
         num_snps_bin1 = np.zeros(num_jk, dtype=np.int)
         h2_bin1 = np.zeros(num_jk)
         num_snps_bin1[last_bin_index != 0] = cumnum_binsize[last_bin_index[last_bin_index != 0] - 1]
         h2_bin1[last_bin_index != 0] = cumsum_prop_h2[last_bin_index[last_bin_index != 0] - 1, np.arange(num_jk)[last_bin_index != 0]]
-            
-        num_snps_bin2 = cumnum_binsize[last_bin_index]        
+
+        num_snps_bin2 = cumnum_binsize[last_bin_index]
         h2_bin2 = cumsum_prop_h2[last_bin_index, np.arange(num_jk)]
         slope = (num_snps_bin2-num_snps_bin1).astype(np.float) / (h2_bin2-h2_bin1)
         assert not np.any(np.isnan(slope))
-        Mp = np.ceil(num_snps_bin1 + slope * (p - h2_bin1)).astype(np.int)        
-        
-        return Mp
+        return np.ceil(num_snps_bin1 + slope * (p - h2_bin1)).astype(np.int)
             
     
     def compute_Mp_df(self, prop_h2, prop_h2_jk, cumnum_binsize, outlier_coef=25):    
-    
+
         cumsum_prop_h2 = np.cumsum(prop_h2)
         cumsum_prop_h2_jk = np.cumsum(prop_h2_jk, axis=0)
         dicts_list = []
@@ -222,8 +225,7 @@ class PolyLoc(PolyFun):
             Mp_jk = Mp_jk[~is_outlier_jk]
             Mp_stderr = np.std(Mp_jk, ddof=0) * np.sqrt(len(Mp_jk)-1)
             dicts_list.append({'p':p, 'Mp':Mp, 'Mp_STDERR':Mp_stderr})
-        df_Mp = pd.DataFrame(dicts_list)
-        return df_Mp
+        return pd.DataFrame(dicts_list)
         
     def compute_polyloc(self, args):
     

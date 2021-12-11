@@ -61,33 +61,33 @@ if __name__ == '__main__':
     parser.add_argument('--n', required=True, type=int, help='Sample size')
     parser.add_argument('--geno', default=None, help='Genotypes file (plink or bgen format)')
     parser.add_argument('--ld', default=None, help='prefix of LD matrix file names')
-    
+
     #LDstore related parameters
     parser.add_argument('--ldstore', default=None, help='Path to an LDstore executable file')
     parser.add_argument('--threads', type=int, default=None, help='The number of CPU cores LDstore will use (if not specified, LDstore will use the max number of CPU cores available')
     parser.add_argument('--cache-dir', default=None, help='If specified, this is a path of a directory that will cache LD matrices that have already been computed')
-    
+
     parser.add_argument('--max-num-causal', required=True, type=int, help='Number of causal SNPs')
     parser.add_argument('--non-funct', action='store_true', default=False, help='Perform non-functionally informed fine-mapping')
     parser.add_argument('--hess', action='store_true', default=False, help='If specified, estimate causal effect variance via HESS')
     parser.add_argument('--verbose', action='store_true', default=False, help='If specified, show verbose output')
-    
+
     parser.add_argument('--sample-file', default=None, help='BGEN files must be used together with a sample file')
     parser.add_argument('--incl-samples', default=None, help='A single-column text file specifying the ids of individuals to exclude from fine-mapping')
     parser.add_argument('--out', required=True, help='name of the output file')
-    
+
     #check package versions
     check_package_versions()
-    
+
     #show splash screen
     splash_screen()
-    
+
     #extract args
     args = parser.parse_args()
 
     #configure logger
     configure_logger(args.out)
-    
+
     #check params
     if args.geno is None:
         if args.ld is None:
@@ -99,14 +99,10 @@ if __name__ == '__main__':
             raise ValueError('cannot specify both --geno and --ld')
         if args.ldstore is None:
             raise ValueError('You must specify --ldstore together with --geno')
-    
-        
+
+
     #load LD matrix if requested
-    if args.ld is None:
-        ld, df_ld_snps = None, None
-    else:
-        ld, df_ld_snps = load_ld(args.ld)
-    
+    ld, df_ld_snps = (None, None) if args.ld is None else load_ld(args.ld)
     #start fine-mapping
     if args.method == 'susie':
         finemap_obj = SUSIE_Wrapper(genotypes_file=args.geno, sumstats_file=args.sumstats, n=args.n, chr_num=args.chr, 

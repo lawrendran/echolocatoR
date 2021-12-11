@@ -179,10 +179,7 @@ class __GenotypeArrayInMemory__(object):
         cor_sum = np.zeros((m, n_a))
         # b = index of first SNP for which SNP 0 is not included in LD Score
         b = np.nonzero(block_left > 0)
-        if np.any(b):
-            b = b[0][0]
-        else:
-            b = m
+        b = b[0][0] if np.any(b) else m
         b = int(np.ceil(b/c)*c)  # round up to a multiple of c
         if b > m:
             c = 1
@@ -343,7 +340,7 @@ class PlinkBEDFile(__GenotypeArrayInMemory__):
         kept_snps = []
         freq = []
         logging.info('Applying SNPs filter...')
-        for e, j in enumerate(tqdm(keep_snps)):
+        for j in tqdm(keep_snps):
             z = geno[2*nru*j:2*nru*(j+1)]
             A = z[0::2]
             a = A.count()
@@ -402,7 +399,7 @@ class PlinkBEDFile(__GenotypeArrayInMemory__):
         X = np.array(slice.decode(self._bedcode), dtype="float64").reshape((b, nru)).T
         X = X[0:n, :]
         Y = np.zeros(X.shape)
-        for j in range(0, b):
+        for j in range(b):
             newsnp = X[:, j]
             ii = newsnp != 9
             avg = np.mean(newsnp[ii])
